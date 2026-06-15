@@ -47,6 +47,35 @@ def get_current_user():
     user = sp.current_user()
     return jsonify(user)
 
+@app.route("/top-artists")
+def get_top_artists():
+    token_info = session.get("token_info")
+    if not token_info:
+        return jsonify({"error": "User not logged in"}), 401
+    sp = spotipy.Spotify(auth=token_info["access_token"])
+    top_artists = sp.current_user_top_artists(limit=10, time_range = "medium_term")
+    artists = [{
+        "name": artist.get("name"),
+        "id": artist.get("id"),
+        "genres": artist.get("genres", []),
+        "popularity": artist.get("popularity"),
+    } for artist in top_artists["items"]]
+    return jsonify(artists)
+
+@app.route("/top-tracks")
+def get_top_tracks():
+    token_info = session.get("token_info")
+    if not token_info:
+        return jsonify({"error": "User not logged in"}), 401
+    sp = spotipy.Spotify(auth=token_info["access_token"])
+    top_tracks = sp.current_user_top_tracks(limit=10, time_range = "medium_term"   )
+    tracks = [{
+        "name": track.get("name"),
+        "id": track.get("id"),
+        "album": track.get("album", {}).get("name"),
+        "popularity": track.get("popularity", []),
+    } for track in top_tracks["items"]]
+    return jsonify(tracks)
 
 if __name__ == "__main__":
     app.run(debug=True)
