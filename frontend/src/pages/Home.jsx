@@ -1,4 +1,5 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { Link } from "react-router-dom"
 import axios from "axios"
 import { useAuth } from "../context/AuthContext"
 
@@ -12,15 +13,35 @@ const SUBTITLES = [
   "One sentence in. A playlist out."
 ]
 
+const LOADING_TEXTS = [
+  "DJWizard is curating your playlist",
+  "Digging through the crates",
+  "Matching tracks to your mood",
+  "Mixing the perfect set",
+  "Consulting the music gods",
+  "Fine-tuning the vibe"
+]
+
 export default function Home() {
   const [message, setMessage] = useState("")
   const [response, setResponse] = useState(null)
   const [tracks, setTracks] = useState([])
+  const [playlist, setPlaylist] = useState(null)
   const [loading, setLoading] = useState(false)
   const { tokenId, authError } = useAuth()
   const [subtitle] = useState(
     () => SUBTITLES[Math.floor(Math.random() * SUBTITLES.length)]
   )
+  const [loadingTextIndex, setLoadingTextIndex] = useState(0)
+
+  useEffect(() => {
+    if (!loading) return
+    setLoadingTextIndex(0)
+    const interval = setInterval(() => {
+      setLoadingTextIndex(i => (i + 1) % LOADING_TEXTS.length)
+    }, 2000)
+    return () => clearInterval(interval)
+  }, [loading])
 
   const handleLogin = () => {
     window.location.href = `${API}/login`
@@ -31,6 +52,7 @@ export default function Home() {
     setLoading(true)
     setResponse(null)
     setTracks([])
+    setPlaylist(null)
     try {
       const res = await axios.post(`${API}/chat`, {
         message,
@@ -38,6 +60,7 @@ export default function Home() {
       })
       setResponse(res.data.response)
       setTracks(res.data.tracks)
+      setPlaylist(res.data.playlist)
     } catch (err) {
       setResponse("Something went wrong. Try logging in again.")
     }
@@ -46,6 +69,11 @@ export default function Home() {
 
   return (
     <div style={styles.container}>
+      <style>{`
+        @keyframes djwizard-spin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
       <div style={styles.header}>
         <h1 style={styles.title}>DJWizard</h1>
         <p style={styles.subtitle}>{subtitle}</p>
@@ -82,7 +110,10 @@ export default function Home() {
           </div>
 
           {loading && (
-            <p style={styles.loading}>🎵 DJWizard is curating your playlist...</p>
+            <div style={styles.loadingContainer}>
+              <div style={styles.spinner} />
+              <p style={styles.loadingText}>{LOADING_TEXTS[loadingTextIndex]}</p>
+            </div>
           )}
 
           {response && (
@@ -93,7 +124,14 @@ export default function Home() {
 
           {tracks.length > 0 && (
             <div style={styles.tracklist}>
-              <h2 style={styles.tracklistTitle}>Your Playlist</h2>
+              <div style={styles.tracklistHeader}>
+                <h2 style={styles.tracklistTitle}>
+                  {playlist ? playlist.name : "Your Curated Playlist"}
+                </h2>
+                <Link to="/playlists" style={styles.playlistsLink}>
+                  View in My Playlists →
+                </Link>
+              </div>
               {tracks.map((track, i) => (
                 <a
                   key={i}
@@ -165,6 +203,22 @@ const styles = {
     cursor: "pointer"
   },
   loading: { color: "#888", textAlign: "center" },
+  loadingContainer: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: "12px",
+    padding: "8px 0"
+  },
+  spinner: {
+    width: "28px",
+    height: "28px",
+    border: "3px solid #333",
+    borderTopColor: "#1DB954",
+    borderRadius: "50%",
+    animation: "djwizard-spin 0.8s linear infinite"
+  },
+  loadingText: { color: "#888", textAlign: "center", margin: 0 },
   responseBox: {
     backgroundColor: "#1a1a1a",
     borderRadius: "8px",
@@ -172,7 +226,15 @@ const styles = {
   },
   responseText: { color: "#ccc", lineHeight: "1.6" },
   tracklist: { display: "flex", flexDirection: "column", gap: "12px" },
-  tracklistTitle: { fontSize: "1.2rem", fontWeight: "600", marginBottom: "4px" },
+  tracklistHeader: {
+    display: "flex",
+    alignItems: "baseline",
+    justifyContent: "space-between",
+    gap: "12px",
+    marginBottom: "4px"
+  },
+  tracklistTitle: { fontSize: "1.2rem", fontWeight: "600" },
+  playlistsLink: { color: "#1DB954", fontSize: "0.85rem", textDecoration: "none", whiteSpace: "nowrap" },
   trackItem: {
     display: "flex",
     alignItems: "center",

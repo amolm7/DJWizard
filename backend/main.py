@@ -2,12 +2,15 @@ from flask import Flask, redirect, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
 import os
+import re
 import spotipy
 import anthropic
 import json
+from datetime import datetime, timezone
 from spotipy.oauth2 import SpotifyOAuth
 import uuid
 token_store = {}
+playlist_store = {}
 
 load_dotenv()
 
@@ -37,7 +40,10 @@ With each playlist, include a mix of well-known hits and hidden gems.
 Well-known hits have more than 200,000,000 streams, and hidden gems have less than 100,000,000. 
 Additionally, include a mix of well-known artists (>10 million monthly listeners) and lesser-known artists. 
 For EACH song you choose, call the search_spotify_track tool to verify it exists on Spotify.
-Once you have verified all tracks, give a short, friendly summary of the playlist you built and why it fits their request."""
+Once you have verified all tracks, respond with exactly two lines in this exact format and nothing else:
+TITLE: <a short, catchy playlist name, 2-5 words, no quotes>
+SUMMARY: <one brief, friendly sentence describing the overall vibe and calling out 1-2 standout songs by name>
+Do not list out all the tracks or their details in the summary - the full tracklist is shown separately."""
 
 def get_spotify_oauth():
     return SpotifyOAuth(
@@ -122,33 +128,25 @@ def get_top_tracks():
     } for track in top_tracks["items"]]
     return jsonify(tracks)
 
-@app.route("/chat", methods=["POST"])
-def chat():
-    token_id = request.json.get("token_id")
-    if not token_id or token_id not in token_store:
-        return jsonify({"error": "Not logged in"}), 401
+def search_track(token_id, track_name, artist_name):
+    sp = spotipy.Spotify(auth=token_store[token_id]["access_token"])
+    query = f"track:{track_name} artist:{artist_name}"
+    results = sp.search(q=query, type="track", limit=1)
+    items = results["tracks"]["items"]
+    if not items:
+        return {"found": False, "track_name": track_name, "artist_name": artist_name}
+    track = items[0]
+    return {
+        "found": True,
+        "name": track["name"],
+        "artist": track["artists"][0]["name"],
+        "id": track["id"],
+        "url": track["external_urls"]["spotify"],
+        "album_image": track["album"]["images"][0]["url"] if track["album"]["images"] else None
+    }
 
-    user_message = request.json.get("message")
-    messages = [{"role": "user", "content": user_message}]
+def run_playlist_conversation(token_id, messages):
     found_tracks = []
-
-    def search_track(track_name, artist_name):
-        sp = spotipy.Spotify(auth=token_store[token_id]["access_token"])
-        query = f"track:{track_name} artist:{artist_name}"
-        results = sp.search(q=query, type="track", limit=1)
-        items = results["tracks"]["items"]
-        if not items:
-            return {"found": False, "track_name": track_name, "artist_name": artist_name}
-        track = items[0]
-        return {
-            "found": True,
-            "name": track["name"],
-            "artist": track["artists"][0]["name"],
-            "id": track["id"],
-            "url": track["external_urls"]["spotify"],
-            "album_image": track["album"]["images"][0]["url"] if track["album"]["images"] else None
-        }
-
     while True:
         response = claude_client.messages.create(
             model="claude-sonnet-4-6",
@@ -160,14 +158,14 @@ def chat():
 
         if response.stop_reason != "tool_use":
             final_text = next(block.text for block in response.content if block.type == "text")
-            return jsonify({"response": final_text, "tracks": found_tracks})
+            return final_text, found_tracks
 
         messages.append({"role": "assistant", "content": response.content})
 
         tool_results = []
         for block in response.content:
             if block.type == "tool_use" and block.name == "search_spotify_track":
-                result = search_track(**block.input)
+                result = search_track(token_id, **block.input)
                 if result.get("found"):
                     found_tracks.append(result)
                 tool_results.append({
@@ -177,7 +175,93 @@ def chat():
                 })
 
         messages.append({"role": "user", "content": tool_results})
-    
+
+def parse_title_and_summary(text):
+    title_match = re.search(r"TITLE:\s*(.+)", text)
+    summary_match = re.search(r"SUMMARY:\s*(.+)", text, re.DOTALL)
+    title = title_match.group(1).strip() if title_match else "Untitled Playlist"
+    summary = summary_match.group(1).strip() if summary_match else text.strip()
+    return title, summary
+
+@app.route("/chat", methods=["POST"])
+def chat():
+    token_id = request.json.get("token_id")
+    if not token_id or token_id not in token_store:
+        return jsonify({"error": "Not logged in"}), 401
+
+    user_message = request.json.get("message")
+    messages = [{"role": "user", "content": user_message}]
+
+    final_text, found_tracks = run_playlist_conversation(token_id, messages)
+    title, summary = parse_title_and_summary(final_text)
+
+    playlist = {
+        "id": str(uuid.uuid4()),
+        "name": title,
+        "prompt": user_message,
+        "summary": summary,
+        "tracks": found_tracks,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    playlist_store.setdefault(token_id, []).append(playlist)
+
+    return jsonify({"response": summary, "tracks": found_tracks, "playlist": playlist})
+
+@app.route("/playlists")
+def get_playlists():
+    token_id = request.args.get("token_id")
+    if not token_id or token_id not in token_store:
+        return jsonify({"error": "Not logged in"}), 401
+    return jsonify(playlist_store.get(token_id, []))
+
+@app.route("/playlists/<playlist_id>", methods=["PATCH"])
+def rename_playlist(playlist_id):
+    token_id = request.json.get("token_id")
+    if not token_id or token_id not in token_store:
+        return jsonify({"error": "Not logged in"}), 401
+
+    name = request.json.get("name", "").strip()
+    if not name:
+        return jsonify({"error": "Name is required"}), 400
+
+    playlist = next(
+        (p for p in playlist_store.get(token_id, []) if p["id"] == playlist_id), None
+    )
+    if not playlist:
+        return jsonify({"error": "Playlist not found"}), 404
+
+    playlist["name"] = name
+    return jsonify(playlist)
+
+@app.route("/playlists/<playlist_id>/more", methods=["POST"])
+def generate_more(playlist_id):
+    token_id = request.json.get("token_id")
+    if not token_id or token_id not in token_store:
+        return jsonify({"error": "Not logged in"}), 401
+
+    playlist = next(
+        (p for p in playlist_store.get(token_id, []) if p["id"] == playlist_id), None
+    )
+    if not playlist:
+        return jsonify({"error": "Playlist not found"}), 404
+
+    existing_names = ", ".join(f'"{t["name"]}" by {t["artist"]}' for t in playlist["tracks"])
+    followup_message = (
+        f"Earlier you built a playlist called \"{playlist['name']}\" for this request: "
+        f"\"{playlist['prompt']}\". The existing tracks are: {existing_names}. "
+        f"Add about 5 more real songs that fit the same vibe, without repeating any of the existing tracks."
+    )
+    messages = [{"role": "user", "content": followup_message}]
+
+    _, new_tracks = run_playlist_conversation(token_id, messages)
+
+    existing_ids = {t["id"] for t in playlist["tracks"]}
+    for track in new_tracks:
+        if track["id"] not in existing_ids:
+            playlist["tracks"].append(track)
+            existing_ids.add(track["id"])
+
+    return jsonify(playlist)
 
 if __name__ == "__main__":
     app.run(debug=True)
