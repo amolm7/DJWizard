@@ -168,11 +168,11 @@ const styles = {
   },
   header: { textAlign: "center" },
   title: { fontFamily: "'Bungee', cursive", fontSize: "2.5rem", letterSpacing: "1px" },
-  subtitle: { color: "#888", marginTop: "8px", fontSize: "1rem" },
+  subtitle: { color: "var(--text-secondary)", marginTop: "8px", fontSize: "1rem" },
   loginContainer: { display: "flex", flexDirection: "column", alignItems: "center", gap: "12px" },
   loginButton: {
-    backgroundColor: "#1DB954",
-    color: "#000",
+    backgroundColor: "var(--accent)",
+    color: "var(--accent-contrast)",
     border: "none",
     borderRadius: "50px",
     padding: "14px 32px",
@@ -184,17 +184,17 @@ const styles = {
   inputRow: { display: "flex", gap: "12px" },
   input: {
     flex: 1,
-    backgroundColor: "#1a1a1a",
-    border: "1px solid #333",
+    backgroundColor: "var(--bg-elevated)",
+    border: "1px solid var(--border)",
     borderRadius: "8px",
     padding: "12px 16px",
-    color: "#fff",
+    color: "var(--text-primary)",
     fontSize: "1rem",
     outline: "none"
   },
   button: {
-    backgroundColor: "#1DB954",
-    color: "#000",
+    backgroundColor: "var(--accent)",
+    color: "var(--accent-contrast)",
     border: "none",
     borderRadius: "8px",
     padding: "12px 24px",
@@ -202,7 +202,7 @@ const styles = {
     fontWeight: "600",
     cursor: "pointer"
   },
-  loading: { color: "#888", textAlign: "center" },
+  loading: { color: "var(--text-secondary)", textAlign: "center" },
   loadingContainer: {
     display: "flex",
     flexDirection: "column",
@@ -213,18 +213,18 @@ const styles = {
   spinner: {
     width: "28px",
     height: "28px",
-    border: "3px solid #333",
-    borderTopColor: "#1DB954",
+    border: "3px solid var(--border)",
+    borderTopColor: "var(--accent)",
     borderRadius: "50%",
     animation: "djwizard-spin 0.8s linear infinite"
   },
-  loadingText: { color: "#888", textAlign: "center", margin: 0 },
+  loadingText: { color: "var(--text-secondary)", textAlign: "center", margin: 0 },
   responseBox: {
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "var(--bg-elevated)",
     borderRadius: "8px",
     padding: "16px"
   },
-  responseText: { color: "#ccc", lineHeight: "1.6" },
+  responseText: { color: "var(--text-tertiary)", lineHeight: "1.6" },
   tracklist: { display: "flex", flexDirection: "column", gap: "12px" },
   tracklistHeader: {
     display: "flex",
@@ -234,18 +234,18 @@ const styles = {
     marginBottom: "4px"
   },
   tracklistTitle: { fontSize: "1.2rem", fontWeight: "600" },
-  playlistsLink: { color: "#1DB954", fontSize: "0.85rem", textDecoration: "none", whiteSpace: "nowrap" },
+  playlistsLink: { color: "var(--accent)", fontSize: "0.85rem", textDecoration: "none", whiteSpace: "nowrap" },
   trackItem: {
     display: "flex",
     alignItems: "center",
     gap: "12px",
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "var(--bg-elevated)",
     borderRadius: "8px",
     padding: "12px",
     textDecoration: "none",
-    color: "#fff"
+    color: "var(--text-primary)"
   },
   albumArt: { width: "48px", height: "48px", borderRadius: "4px" },
   trackName: { fontWeight: "600", fontSize: "0.95rem" },
-  artistName: { color: "#888", fontSize: "0.85rem", marginTop: "2px" }
+  artistName: { color: "var(--text-secondary)", fontSize: "0.85rem", marginTop: "2px" }
 }

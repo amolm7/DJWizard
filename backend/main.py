@@ -3,6 +3,7 @@ from flask_cors import CORS
 from dotenv import load_dotenv
 import os
 import re
+import requests
 import spotipy
 import anthropic
 import json
@@ -11,6 +12,21 @@ from spotipy.oauth2 import SpotifyOAuth
 import uuid
 token_store = {}
 playlist_store = {}
+
+# Spotify's edge WAF blocks write requests (e.g. playlist creation) that carry
+# the default python-requests User-Agent, returning an empty-body 403 even
+# with correct scopes. A browser-like User-Agent avoids that.
+_spotify_session = requests.Session()
+_spotify_session.headers["User-Agent"] = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+)
+
+def get_spotify_client(token_id):
+    return spotipy.Spotify(
+        auth=token_store[token_id]["access_token"],
+        requests_session=_spotify_session
+    )
 
 load_dotenv()
 
@@ -95,7 +111,7 @@ def get_current_user():
     token_id = request.args.get("token_id")
     if not token_id or token_id not in token_store:
         return jsonify({"error": "Not logged in"}), 401
-    sp = spotipy.Spotify(auth=token_store[token_id]["access_token"])
+    sp = get_spotify_client(token_id)
     return jsonify(sp.current_user())
 
 @app.route("/top-artists")
@@ -103,7 +119,7 @@ def get_top_artists():
     token_id = request.args.get("token_id")
     if not token_id or token_id not in token_store:
         return jsonify({"error": "Not logged in"}), 401
-    sp = spotipy.Spotify(auth=token_store[token_id]["access_token"])
+    sp = get_spotify_client(token_id)
     top_artists = sp.current_user_top_artists(limit=10, time_range="medium_term")
     artists = [{
         "name": artist.get("name", ""),
@@ -118,7 +134,7 @@ def get_top_tracks():
     token_id = request.args.get("token_id")
     if not token_id or token_id not in token_store:
         return jsonify({"error": "Not logged in"}), 401
-    sp = spotipy.Spotify(auth=token_store[token_id]["access_token"])
+    sp = get_spotify_client(token_id)
     top_tracks = sp.current_user_top_tracks(limit=10, time_range="medium_term")
     tracks = [{
         "name": track.get("name", ""),
@@ -129,7 +145,7 @@ def get_top_tracks():
     return jsonify(tracks)
 
 def search_track(token_id, track_name, artist_name):
-    sp = spotipy.Spotify(auth=token_store[token_id]["access_token"])
+    sp = get_spotify_client(token_id)
     query = f"track:{track_name} artist:{artist_name}"
     results = sp.search(q=query, type="track", limit=1)
     items = results["tracks"]["items"]
@@ -231,6 +247,9 @@ def rename_playlist(playlist_id):
         return jsonify({"error": "Playlist not found"}), 404
 
     playlist["name"] = name
+    if playlist.get("spotify_id"):
+        sp = get_spotify_client(token_id)
+        sp.playlist_change_details(playlist["spotify_id"], name=name)
     return jsonify(playlist)
 
 @app.route("/playlists/<playlist_id>/more", methods=["POST"])
@@ -260,6 +279,37 @@ def generate_more(playlist_id):
         if track["id"] not in existing_ids:
             playlist["tracks"].append(track)
             existing_ids.add(track["id"])
+
+    return jsonify(playlist)
+
+@app.route("/playlists/<playlist_id>/save-to-spotify", methods=["POST"])
+def save_to_spotify(playlist_id):
+    token_id = request.json.get("token_id")
+    if not token_id or token_id not in token_store:
+        return jsonify({"error": "Not logged in"}), 401
+
+    playlist = next(
+        (p for p in playlist_store.get(token_id, []) if p["id"] == playlist_id), None
+    )
+    if not playlist:
+        return jsonify({"error": "Playlist not found"}), 404
+
+    sp = get_spotify_client(token_id)
+    track_uris = [f"spotify:track:{t['id']}" for t in playlist["tracks"]]
+
+    if playlist.get("spotify_id"):
+        sp.playlist_replace_items(playlist["spotify_id"], track_uris)
+    else:
+        user_id = sp.current_user()["id"]
+        sp_playlist = sp.user_playlist_create(
+            user_id,
+            name=playlist["name"],
+            public=False,
+            description=playlist.get("summary", "")[:300]
+        )
+        sp.playlist_add_items(sp_playlist["id"], track_uris)
+        playlist["spotify_id"] = sp_playlist["id"]
+        playlist["spotify_url"] = sp_playlist["external_urls"]["spotify"]
 
     return jsonify(playlist)
 

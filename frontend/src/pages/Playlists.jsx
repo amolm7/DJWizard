@@ -11,6 +11,7 @@ export default function Playlists() {
   const [editingId, setEditingId] = useState(null)
   const [editValue, setEditValue] = useState("")
   const [generatingId, setGeneratingId] = useState(null)
+  const [savingId, setSavingId] = useState(null)
   const [expandedIds, setExpandedIds] = useState(() => new Set())
 
   const toggleExpanded = id => {
@@ -68,6 +69,18 @@ export default function Playlists() {
       setPlaylists(prev => prev.map(p => (p.id === playlistId ? res.data : p)))
     } finally {
       setGeneratingId(null)
+    }
+  }
+
+  const saveToSpotify = async playlistId => {
+    setSavingId(playlistId)
+    try {
+      const res = await axios.post(`${API}/playlists/${playlistId}/save-to-spotify`, {
+        token_id: tokenId
+      })
+      setPlaylists(prev => prev.map(p => (p.id === playlistId ? res.data : p)))
+    } finally {
+      setSavingId(null)
     }
   }
 
@@ -160,13 +173,33 @@ export default function Playlists() {
                     ))}
                   </div>
 
-                  <button
-                    style={styles.moreButton}
-                    onClick={() => generateMore(playlist.id)}
-                    disabled={generatingId === playlist.id}
-                  >
-                    {generatingId === playlist.id ? "Finding more songs..." : "Generate More Like This"}
-                  </button>
+                  <div style={styles.actionsRow}>
+                    <button
+                      style={styles.moreButton}
+                      onClick={() => generateMore(playlist.id)}
+                      disabled={generatingId === playlist.id}
+                    >
+                      {generatingId === playlist.id ? "Finding more songs..." : "Generate More Like This"}
+                    </button>
+                    {playlist.spotify_url ? (
+                      <a
+                        href={playlist.spotify_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={styles.spotifyButton}
+                      >
+                        Open in Spotify ↗
+                      </a>
+                    ) : (
+                      <button
+                        style={styles.spotifyButton}
+                        onClick={() => saveToSpotify(playlist.id)}
+                        disabled={savingId === playlist.id}
+                      >
+                        {savingId === playlist.id ? "Saving..." : "Save to Spotify"}
+                      </button>
+                    )}
+                  </div>
                 </>
               )}
             </div>
@@ -194,11 +227,11 @@ const styles = {
     textAlign: "center"
   },
   title: { fontSize: "2rem", fontWeight: "700", marginBottom: "12px" },
-  text: { color: "#888" },
+  text: { color: "var(--text-secondary)" },
   list: { display: "flex", flexDirection: "column", gap: "20px" },
   card: {
-    backgroundColor: "#141414",
-    border: "1px solid #262626",
+    backgroundColor: "var(--bg-card)",
+    border: "1px solid var(--border-subtle)",
     borderRadius: "12px",
     padding: "20px",
     display: "flex",
@@ -210,8 +243,8 @@ const styles = {
   titleActions: { display: "flex", alignItems: "center", gap: "8px" },
   toggleButton: {
     backgroundColor: "transparent",
-    color: "#888",
-    border: "1px solid #333",
+    color: "var(--text-secondary)",
+    border: "1px solid var(--border)",
     borderRadius: "6px",
     width: "34px",
     height: "34px",
@@ -230,17 +263,17 @@ const styles = {
   renameRow: { display: "flex", gap: "8px" },
   renameInput: {
     flex: 1,
-    backgroundColor: "#1a1a1a",
-    border: "1px solid #333",
+    backgroundColor: "var(--bg-elevated)",
+    border: "1px solid var(--border)",
     borderRadius: "8px",
     padding: "8px 12px",
-    color: "#fff",
+    color: "var(--text-primary)",
     fontSize: "1rem",
     outline: "none"
   },
   smallButton: {
-    backgroundColor: "#1DB954",
-    color: "#000",
+    backgroundColor: "var(--accent)",
+    color: "var(--accent-contrast)",
     border: "none",
     borderRadius: "6px",
     padding: "8px 14px",
@@ -251,8 +284,8 @@ const styles = {
   },
   smallButtonSecondary: {
     backgroundColor: "transparent",
-    color: "#888",
-    border: "1px solid #333",
+    color: "var(--text-secondary)",
+    border: "1px solid var(--border)",
     borderRadius: "6px",
     padding: "8px 14px",
     fontSize: "0.85rem",
@@ -260,30 +293,45 @@ const styles = {
     cursor: "pointer",
     whiteSpace: "nowrap"
   },
-  summary: { color: "#ccc", lineHeight: "1.5", margin: 0 },
+  summary: { color: "var(--text-tertiary)", lineHeight: "1.5", margin: 0 },
   tracklist: { display: "flex", flexDirection: "column", gap: "10px" },
   trackItem: {
     display: "flex",
     alignItems: "center",
     gap: "12px",
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "var(--bg-elevated)",
     borderRadius: "8px",
     padding: "10px 12px",
     textDecoration: "none",
-    color: "#fff"
+    color: "var(--text-primary)"
   },
   albumArt: { width: "44px", height: "44px", borderRadius: "4px" },
   trackName: { fontWeight: "600", fontSize: "0.9rem", margin: 0 },
-  artistName: { color: "#888", fontSize: "0.8rem", marginTop: "2px" },
+  artistName: { color: "var(--text-secondary)", fontSize: "0.8rem", marginTop: "2px" },
   moreButton: {
     alignSelf: "flex-start",
     backgroundColor: "transparent",
-    color: "#1DB954",
-    border: "1px solid #1DB954",
+    color: "var(--accent)",
+    border: "1px solid var(--accent)",
     borderRadius: "8px",
     padding: "10px 18px",
     fontSize: "0.9rem",
     fontWeight: "600",
     cursor: "pointer"
+  },
+  actionsRow: { display: "flex", flexWrap: "wrap", gap: "12px" },
+  spotifyButton: {
+    alignSelf: "flex-start",
+    backgroundColor: "var(--accent)",
+    color: "var(--accent-contrast)",
+    border: "none",
+    borderRadius: "8px",
+    padding: "10px 18px",
+    fontSize: "0.9rem",
+    fontWeight: "600",
+    cursor: "pointer",
+    textDecoration: "none",
+    display: "inline-flex",
+    alignItems: "center"
   }
 }

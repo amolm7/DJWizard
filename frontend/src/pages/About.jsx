@@ -6,7 +6,7 @@ const styles = {
     textAlign: "center"
   },
   title: { fontSize: "2rem", fontWeight: "700", marginBottom: "12px" },
-  text: { color: "#888" }
+  text: { color: "var(--text-secondary)" }
 }
 
 export default function About() {
