@@ -2,7 +2,7 @@ import { useState, useEffect } from "react"
 import axios from "axios"
 import { useAuth } from "../context/AuthContext"
 
-const API = "http://127.0.0.1:5000"
+const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:5000"
 
 export default function Playlists() {
   const { tokenId } = useAuth()

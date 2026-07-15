@@ -11,7 +11,7 @@ import RepeatPlays from "../components/stats/RepeatPlays"
 import ProfileStatsCard from "../components/stats/ProfileStatsCard"
 import TasteRadar from "../components/stats/TasteRadar"
 
-const API = "http://127.0.0.1:5000"
+const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:5000"
 const TIME_RANGES = ["short_term", "medium_term", "long_term"]
 
 const emptyRanges = () => ({

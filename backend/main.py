@@ -30,6 +30,8 @@ def get_spotify_client(token_id):
 
 load_dotenv()
 
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+
 app = Flask(__name__)
 CORS(app)
 
@@ -87,17 +89,17 @@ def login():
 def callback():
     error = request.args.get("error")
     if error:
-        return redirect(f"http://localhost:5173?auth_error={error}")
+        return redirect(f"{FRONTEND_URL}?auth_error={error}")
 
     code = request.args.get("code")
     if not code:
-        return redirect("http://localhost:5173?auth_error=missing_code")
+        return redirect(f"{FRONTEND_URL}?auth_error=missing_code")
 
     sp_oauth = get_spotify_oauth()
     token_info = sp_oauth.get_access_token(code, check_cache=False)
     token_id = str(uuid.uuid4())
     token_store[token_id] = token_info
-    return redirect(f"http://localhost:5173?token={token_id}")
+    return redirect(f"{FRONTEND_URL}?token={token_id}")
 
 @app.route("/check-auth")
 def check_auth():
