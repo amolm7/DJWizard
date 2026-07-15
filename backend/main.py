@@ -66,7 +66,7 @@ def get_spotify_oauth():
         client_id=os.getenv("SPOTIFY_CLIENT_ID"),
         client_secret=os.getenv("SPOTIFY_CLIENT_SECRET"),
         redirect_uri=os.getenv("SPOTIFY_REDIRECT_URI"),
-        scope="user-top-read user-read-recently-played playlist-modify-public playlist-modify-private user-library-read user-library-modify",
+        scope="user-top-read user-read-recently-played playlist-modify-public playlist-modify-private user-library-read user-library-modify user-follow-read playlist-read-private",
         # Without this, spotipy falls back to a shared file cache (backend/.cache) and
         # get_access_token() returns whatever token is in that file instead of exchanging
         # the fresh code, so every login can collide onto one stale token.
@@ -114,13 +114,18 @@ def get_current_user():
     sp = get_spotify_client(token_id)
     return jsonify(sp.current_user())
 
+VALID_TIME_RANGES = {"short_term", "medium_term", "long_term"}
+
 @app.route("/top-artists")
 def get_top_artists():
     token_id = request.args.get("token_id")
     if not token_id or token_id not in token_store:
         return jsonify({"error": "Not logged in"}), 401
+    time_range = request.args.get("time_range", "medium_term")
+    if time_range not in VALID_TIME_RANGES:
+        return jsonify({"error": "Invalid time_range"}), 400
     sp = get_spotify_client(token_id)
-    top_artists = sp.current_user_top_artists(limit=10, time_range="medium_term")
+    top_artists = sp.current_user_top_artists(limit=50, time_range=time_range)
     artists = [{
         "name": artist.get("name", ""),
         "genres": artist.get("genres", []),
@@ -134,8 +139,11 @@ def get_top_tracks():
     token_id = request.args.get("token_id")
     if not token_id or token_id not in token_store:
         return jsonify({"error": "Not logged in"}), 401
+    time_range = request.args.get("time_range", "medium_term")
+    if time_range not in VALID_TIME_RANGES:
+        return jsonify({"error": "Invalid time_range"}), 400
     sp = get_spotify_client(token_id)
-    top_tracks = sp.current_user_top_tracks(limit=10, time_range="medium_term")
+    top_tracks = sp.current_user_top_tracks(limit=50, time_range=time_range)
     tracks = [{
         "name": track.get("name", ""),
         "artist": track["artists"][0]["name"],
@@ -143,6 +151,66 @@ def get_top_tracks():
         "id": track.get("id", "")
     } for track in top_tracks["items"]]
     return jsonify(tracks)
+
+@app.route("/recently-played")
+def get_recently_played():
+    token_id = request.args.get("token_id")
+    if not token_id or token_id not in token_store:
+        return jsonify({"error": "Not logged in"}), 401
+    sp = get_spotify_client(token_id)
+    recent = sp.current_user_recently_played(limit=50)
+    plays = [{
+        "name": item["track"].get("name", ""),
+        "artist": item["track"]["artists"][0]["name"],
+        "id": item["track"].get("id", ""),
+        "played_at": item["played_at"],
+        "duration_ms": item["track"].get("duration_ms", 0),
+        "album_image": item["track"]["album"]["images"][0]["url"] if item["track"]["album"]["images"] else None,
+        "url": item["track"]["external_urls"]["spotify"]
+    } for item in recent["items"]]
+    return jsonify(plays)
+
+@app.route("/profile-stats")
+def get_profile_stats():
+    token_id = request.args.get("token_id")
+    if not token_id or token_id not in token_store:
+        return jsonify({"error": "Not logged in"}), 401
+    sp = get_spotify_client(token_id)
+    saved_tracks = sp.current_user_saved_tracks(limit=1)
+    followed_artists = sp.current_user_followed_artists(limit=1)
+    playlists = sp.current_user_playlists(limit=1)
+    return jsonify({
+        "saved_tracks": saved_tracks["total"],
+        "followed_artists": followed_artists["artists"]["total"],
+        "playlists": playlists["total"]
+    })
+
+@app.route("/audio-features")
+def get_audio_features():
+    token_id = request.args.get("token_id")
+    if not token_id or token_id not in token_store:
+        return jsonify({"error": "Not logged in"}), 401
+    track_ids = [t for t in request.args.get("track_ids", "").split(",") if t][:100]
+    if not track_ids:
+        return jsonify({"error": "No track_ids provided"}), 400
+    sp = get_spotify_client(token_id)
+    try:
+        features = sp.audio_features(track_ids)
+    except spotipy.exceptions.SpotifyException:
+        return jsonify({"available": False}), 200
+    features = [f for f in features if f]
+    if not features:
+        return jsonify({"available": False}), 200
+    return jsonify({
+        "available": True,
+        "features": [{
+            "id": f["id"],
+            "danceability": f["danceability"],
+            "energy": f["energy"],
+            "valence": f["valence"],
+            "tempo": f["tempo"]
+        } for f in features]
+    })
 
 def search_track(token_id, track_name, artist_name):
     sp = get_spotify_client(token_id)
