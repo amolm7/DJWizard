@@ -2,6 +2,10 @@
 .env
 *.env
 
+# Spotipy token cache - contains live OAuth tokens
+.cache
+backend/.cache
+
 # Python
 venv/
 __pycache__/
